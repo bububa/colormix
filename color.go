@@ -1,6 +1,7 @@
 package colormix
 
 import (
+	"fmt"
 	"image/color"
 
 	"github.com/lucasb-eyer/go-colorful"
@@ -29,25 +30,95 @@ const (
 	HCL
 )
 
-type IColor interface {
-	color.Color
-	Hex() string
-	Dense(ColorSpace) *mat.VecDense
-	Ratio() float64
-	SetRatio(float64)
-	SpaceValues(space ColorSpace) (float64, float64, float64)
+type ColorMeta struct {
+	name            string
+	alternativeName string
+	serialNo        string
+	brandName       string
+	formatter       func() string
+}
+
+// SetName update the color name
+func (c *ColorMeta) SetName(name string) {
+	c.name = name
+}
+
+// Name returns the name of color
+func (c ColorMeta) Name() string {
+	return c.name
+}
+
+// SetAlternativeName update the color alternative name
+func (c *ColorMeta) SetAlternativeName(name string) {
+	c.alternativeName = name
+}
+
+// AlternativeName returns the alternative name of color
+func (c ColorMeta) AlternativeName() string {
+	return c.alternativeName
+}
+
+// SetBrandName update the color brand name
+func (c *ColorMeta) SetBrandName(name string) {
+	c.name = name
+}
+
+// SetSerialNo update the color serial number
+func (c *ColorMeta) SetSerialNo(v string) {
+	c.serialNo = v
+}
+
+// SerialNo returns the serial number of color
+func (c ColorMeta) SerialNo() string {
+	return c.serialNo
+}
+
+// BrandName returns the brand name of color
+func (c ColorMeta) BrandName() string {
+	return c.brandName
+}
+
+// SetFormatter set String formatter for color meta
+func (c *ColorMeta) SetFormatter(fn func() string) {
+	c.formatter = fn
+}
+
+func (c ColorMeta) defaultFormatter() string {
+	name := c.name
+	if c.alternativeName != "" {
+		name = c.alternativeName
+	}
+	if c.serialNo != "" {
+		return fmt.Sprintf("%s#%s", name, c.serialNo)
+	}
+	return name
+}
+
+func (c ColorMeta) String() string {
+	if c.formatter != nil {
+		return c.formatter()
+	}
+	return c.defaultFormatter()
 }
 
 // Color named color
 type Color struct {
 	colorful.Color
-	name  string
+	ColorMeta
 	ratio float64
 }
 
 // MakeColor create a color
 func MakeColor(v color.Color) Color {
 	ret, _ := colorful.MakeColor(v)
+	return Color{
+		Color: ret,
+	}
+}
+
+// Hex create a color
+func HexColor(v string) Color {
+	ret, _ := colorful.Hex(v)
 	return Color{
 		Color: ret,
 	}
@@ -67,16 +138,6 @@ func (c Color) Ratio() float64 {
 // SetRatio update the color ratio in a palette
 func (c *Color) SetRatio(ratio float64) {
 	c.ratio = ratio
-}
-
-// SetName update the color name
-func (c *Color) SetName(name string) {
-	c.name = name
-}
-
-// Name returns the name of color
-func (c Color) Name() string {
-	return c.name
 }
 
 // SpaceValues returns float64 values for a specific color space of color
@@ -139,77 +200,4 @@ func ColorInSpace(values []float64, space ColorSpace) color.Color {
 	default:
 		return colorful.LinearRgb(s1, s2, s3)
 	}
-}
-
-// Palette is named color palette
-type Palette struct {
-	name   string
-	colors []IColor
-	cache  map[string]struct{}
-}
-
-// NewPalette returns a new palette instance
-func NewPalette(colors ...color.Color) *Palette {
-	ret := new(Palette)
-	l := len(colors)
-	ret.colors = make([]IColor, 0, l)
-	ret.cache = make(map[string]struct{}, l)
-	for _, v := range colors {
-		val := MakeColor(v)
-		key := val.Hex()
-		if _, found := ret.cache[key]; found {
-			continue
-		}
-		ret.cache[key] = struct{}{}
-		ret.colors = append(ret.colors, &val)
-	}
-	return ret
-}
-
-// AddColors append colors to the palette
-func (p *Palette) AddColors(colors ...IColor) *Palette {
-	for _, v := range colors {
-		key := v.Hex()
-		if _, found := p.cache[key]; found {
-			continue
-		}
-		p.cache[key] = struct{}{}
-		p.colors = append(p.colors, v)
-	}
-	return p
-}
-
-// Dense returns a mat dense of palette
-func (p Palette) Dense(colorSpace ColorSpace) *mat.Dense {
-	cols := 3
-	rows := len(p.colors)
-	values := make([]float64, 0, rows*cols)
-	for _, v := range p.colors {
-		s1, s2, s3 := v.SpaceValues(colorSpace)
-		values = append(values, s1, s2, s3)
-	}
-	return mat.NewDense(len(p.colors), cols, values)
-}
-
-// SetRatio update the color ratio at index(idx) in the palette
-func (p Palette) SetRatio(ratio float64, idx int) {
-	if idx < 0 || idx > len(p.colors) {
-		return
-	}
-	p.colors[idx].SetRatio(ratio)
-}
-
-// Colors returns a list of colors in palette
-func (p Palette) Colors() []IColor {
-	return p.colors
-}
-
-// SetName set palette name
-func (p *Palette) SetName(name string) {
-	p.name = name
-}
-
-// Name returns the name of palette
-func (p Palette) Name() string {
-	return p.name
 }
